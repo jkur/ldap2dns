@@ -103,7 +103,7 @@ struct resourcerecord
 	char cn[64];
 	char dnsdomainname[MAX_DOMAIN_LEN];
 	char class[16];
-	char type[16];
+	char type[5][16];
 	char ipaddr[256][80];
 	char cipaddr[80];
 	char cname[1024]; /* large enough to store DKIM entries, which by rfc5322 have an upper-limit of 998chars */
@@ -547,10 +547,15 @@ static void write_rr(struct resourcerecord* rr, int ipdx, int znix)
 	int i;
 	int res;
 	unsigned char in6addr[sizeof(struct in6_addr)];
+	int tynr = 0;
 
 	if (strcasecmp(rr->class, "IN"))
 		return;
-	if (strcasecmp(rr->type, "NS")==0) {
+
+	for (tynr=0; tynr<5; tynr++) {
+	  //printf("DEBUG: (%d) %s", tynr, rr->type[tynr]);
+	
+	  if (strcasecmp(rr->type[tynr], "NS")==0) {
 		if (tinyfile) {
 			if (znix==0) {
 				if (ipdx<=0 && rr->cipaddr[0]) {
@@ -574,7 +579,7 @@ static void write_rr(struct resourcerecord* rr, int ipdx, int znix)
 			if (ipdx>=0)
 				fprintf(namedzone, "%s.\t%s\tIN A\t%s\n", rr->cname, rr->ttl, rr->ipaddr[ipdx]);
 		}
-	} else if (strcasecmp(rr->type, "MX")==0) {
+	} else if (strcasecmp(rr->type[tynr], "MX")==0) {
 		if (tinyfile) {
 			if (znix==0) {
 				if (ipdx<=0 && rr->cipaddr[0]) {
@@ -598,20 +603,23 @@ static void write_rr(struct resourcerecord* rr, int ipdx, int znix)
 			if (ipdx>=0)
 			  fprintf(namedzone, "%s.%s.\t%s\tIN A\t%s\n", rr->cn, rr->dnsdomainname, rr->ttl, rr->ipaddr[ipdx]);
 		}
-	} else if ( strcasecmp(rr->type, "A")==0) {
-		if (tinyfile) {
+	} else if ( strcasecmp(rr->type[tynr], "A")==0) {
+		char buf[INET6_ADDRSTRLEN];
+		if (inet_pton(AF_INET, rr->ipaddr[ipdx], in6addr)==1) {
+		  if (tinyfile) {
 			if (ipdx<=0 && rr->cipaddr[0])
-				fprintf(tinyfile, "%s%s:%s:%s:%s:%s\n", (znix==0 ? "=" : "+"), rr->dnsdomainname, rr->cipaddr, rr->ttl, rr->timestamp, rr->location);
+			  fprintf(tinyfile, "%s%s:%s:%s:%s:%s\n", (znix==0 ? "=" : "+"), rr->dnsdomainname, rr->cipaddr, rr->ttl, rr->timestamp, rr->location);
 			if (ipdx>=0)
-				fprintf(tinyfile, "+%s:%s:%s:%s:%s\n", rr->dnsdomainname, rr->ipaddr[ipdx], rr->ttl, rr->timestamp, rr->location);
-		}
-		if (namedzone) {
+			  fprintf(tinyfile, "+%s:%s:%s:%s:%s\n", rr->dnsdomainname, rr->ipaddr[ipdx], rr->ttl, rr->timestamp, rr->location);
+		  }
+		  if (namedzone) {
 			if (ipdx<=0 && rr->cipaddr[0])
-			    fprintf(namedzone, "%s.\t%s\tIN A\t%s\n", rr->dnsdomainname, rr->ttl, rr->cipaddr);
+			  fprintf(namedzone, "%s.\t%s\tIN A\t%s\n", rr->dnsdomainname, rr->ttl, rr->cipaddr);
 			if (ipdx>=0)
-			    fprintf(namedzone, "%s.\t%s\tIN A\t%s\n", rr->dnsdomainname, rr->ttl, rr->ipaddr[ipdx]);
+			  fprintf(namedzone, "%s.\t%s\tIN A\t%s\n", rr->dnsdomainname, rr->ttl, rr->ipaddr[ipdx]);
+		  }
 		}
-	} else if (strcasecmp(rr->type, "PTR")==0) {
+	} else if (strcasecmp(rr->type[tynr], "PTR")==0) {
 		int ip[4] = {0, 0, 0, 0};
 		char buf[256];
 		char tmp[8];
@@ -639,17 +647,17 @@ static void write_rr(struct resourcerecord* rr, int ipdx, int znix)
 			fprintf(tinyfile, "^%s:%s:%s:%s:%s\n", buf, rr->cname, rr->ttl, rr->timestamp, rr->location);
 		if (namedzone)
 			fprintf(namedzone, "%s.\t%s\tIN PTR\t%s.\n", buf, rr->ttl, rr->cname);
-	} else if (strcasecmp(rr->type, "CNAME")==0) {
+	} else if (strcasecmp(rr->type[tynr], "CNAME")==0) {
 		if (tinyfile)
 			fprintf(tinyfile, "C%s:%s:%s:%s:%s\n", rr->dnsdomainname, rr->cname, rr->ttl, rr->timestamp, rr->location);
 		if (namedzone)
 		    fprintf(namedzone, "%s.\t%s\tIN CNAME\t%s.\n", rr->dnsdomainname, rr->ttl, rr->cname);
-	} else if (strcasecmp(rr->type, "TXT")==0) {
+	} else if (strcasecmp(rr->type[tynr], "TXT")==0) {
 		if (tinyfile)
 			fprintf(tinyfile, "'%s:%s:%s:%s:%s\n", rr->dnsdomainname, rr->txt, rr->ttl, rr->timestamp, rr->location);
 		if (namedzone)
 			fprintf(namedzone, "%s.\t%s\tIN TXT\t\"%s\"\n", rr->dnsdomainname, rr->ttl, rr->txt);
-	} else if (strcasecmp(rr->type, "SRV")==0) {
+	} else if (strcasecmp(rr->type[tynr], "SRV")==0) {
 		if (tinyfile) {
 			fprintf(tinyfile, ":%s:33:\\%03o\\%03o\\%03o\\%03o\\%03o\\%03o", rr->dnsdomainname, rr->srvpriority >> 8, rr->srvpriority & 0xff, rr->srvweight >> 8, rr->srvweight & 0xff, rr->srvport >> 8, rr->srvport & 0xff);
 			tmp = strdup(rr->cname);
@@ -665,29 +673,30 @@ static void write_rr(struct resourcerecord* rr, int ipdx, int znix)
 		if (namedzone) {
 			fprintf(namedzone, "%s.\t%s\tIN SRV\t%d\t%d\t%d\t%s.\n", rr->dnsdomainname, rr->ttl, rr->srvpriority, rr->srvweight, rr->srvport, rr->cname);
 		}
-	} else if (strcasecmp(rr->type, "AAAA")==0) {
+	} else if (strcasecmp(rr->type[tynr], "AAAA")==0) {
 		/* Even though we don't use the result of inet_pton() for BIND,
 		 * we can use it to validate the address. */
 		if (strlen(rr->cipaddr) > 0) {
-			res = inet_pton(AF_INET6, rr->cipaddr, in6addr);
+		  res = inet_pton(AF_INET6, rr->cipaddr, in6addr);
 		} else {
-			res = inet_pton(AF_INET6, rr->ipaddr[0], in6addr);
+		  res = inet_pton(AF_INET6, rr->ipaddr[ipdx], in6addr);
 		}
 		if (res == 1) {
-			/* Valid IPv6 address found. */
-			if (tinyfile) {
-				fprintf(tinyfile, ":%s:28:", rr->dnsdomainname);
-				for (i=0;i<16;i++) {
-					fprintf(tinyfile, "\\%03o", in6addr[i]);
-				}
-				fprintf(tinyfile, ":%s:%s:%s\n", rr->ttl, rr->timestamp, rr->location);
+		  /* Valid IPv6 address found. */
+		  if (tinyfile) {
+			fprintf(tinyfile, ":%s:28:", rr->dnsdomainname);
+			for (i=0;i<16;i++) {
+			  fprintf(tinyfile, "\\%03o", in6addr[i]);
 			}
-			if (namedzone) {
-				fprintf(namedzone, "%s.\t%s\tIN AAAA\t%s\n", rr->dnsdomainname, rr->ttl, rr->ipaddr[0]);
-			}
+			fprintf(tinyfile, ":%s:%s:%s\n", rr->ttl, rr->timestamp, rr->location);
+		  }
+		  if (namedzone) {
+			fprintf(namedzone, "%s.\t%s\tIN AAAA\t%s\n", rr->dnsdomainname, rr->ttl, rr->ipaddr[ipdx]);
+		  }
 		} else {
-			fprintf(stderr, "[**] Invalid IPv6 address found for %s; skipping record.\n", rr->dnsdomainname);
+		  fprintf(stderr, "[**] Invalid IPv6 address found for %s; skipping record.\n", rr->dnsdomainname);
 		}
+	  }
 	}
 }
 
@@ -750,13 +759,14 @@ static void read_resourcerecords(char* dn, int znix)
 		char* dn = ldap_get_dn(ldap_con, m);
 		struct resourcerecord rr;
 		int ipaddresses = 0;
+		int dnstypes = 0;
 
 		if (options.ldifname[0])
 			fprintf(ldifout, "dn: %s\n", dn);
 		rr.cn[0] = '\0';
 		strncpy(rr.dnsdomainname, zone.domainname, 64);
 		strncpy(rr.class, "IN", 3);
-		rr.type[0] = '\0';
+		rr.type[0][0] = '\0';
 		rr.cname[0] = '\0';
 		rr.cipaddr[0] = '\0';
 		rr.ttl[0] = '\0';
@@ -767,9 +777,10 @@ static void read_resourcerecords(char* dn, int znix)
 		rr.aliasedobjectname[0] = '\0';
 		rr.rr[0] = '\0';
 #endif
-                rr.srvpriority = 0;
-                rr.srvweight = 0;
-                rr.srvport = 0;
+		rr.srvpriority = 0;
+		rr.srvweight = 0;
+		rr.srvport = 0;
+		
 		for (attr = ldap_first_attribute(ldap_con, m, &ber); attr; attr = ldap_next_attribute(ldap_con, m, ber)) {
 			int len = strlen(attr);
 			struct berval** bvals;
@@ -795,10 +806,13 @@ static void read_resourcerecords(char* dn, int znix)
 						else if (options.ldifname[0])
 							fprintf(ldifout, "%s: %s\n", attr, rr.class);
 					} else if (strcasecmp(attr, "DNStype")==0) {
-						if (sscanf(bvals[0]->bv_val, "%16s", rr.type)!=1)
-							rr.type[0] = '\0';
-						else if (options.ldifname[0])
-							fprintf(ldifout, "%s: %s\n", attr, rr.type);
+						  for (dnstypes = 0; bvals[dnstypes] && dnstypes<5; dnstypes++) {
+							//printf("DEBUG: %s (%s)\n", bvals[dnstypes]->bv_val, rr.dnsdomainname);
+							if (sscanf(bvals[dnstypes]->bv_val, "%16s", &rr.type[dnstypes][0])!=1)
+							  rr.type[dnstypes][0] = '\0';
+							else if (options.ldifname[0])
+							  fprintf(ldifout, "%s: %s\n", attr, rr.type[dnstypes]);
+						  }
 					} else if (strcasecmp(attr, "DNSipaddr")==0) {
 						int ip[4];
 						unsigned char in6addr[sizeof(struct in6_addr)];
